@@ -1,0 +1,52 @@
+{
+  "theme": "dark",
+  "update_interval": 1000,
+  "metric_intervals": {
+    "cpu": 500,
+    "ram": 500,
+    "gpu": 1000,
+    "vram": 1000,
+    "disks": 2000,
+    "network": 2000
+  },
+  "visible_blocks": {
+    "cpu": true,
+    "ram": true,
+    "gpu": true,
+    "vram": true,
+    "disk1": true,
+    "disk2": true,
+    "disk3": true,
+    "eth": true
+  },
+  "thresholds": {
+    "cpu_enabled": true,
+    "cpu_percent": 90,
+    "cpu_duration": 60,
+    "gpu_enabled": false,
+    "gpu_percent": 90,
+    "gpu_duration": 60,
+    "show_notification": true,
+    "play_sound": true
+  },
+  "auto_hide": {
+    "enabled": false,
+    "delay": 10
+  },
+  "disks": {
+    "mode": "auto",
+    "selected": []
+  },
+  "disk_paths": [],
+  "network_interfaces": [],
+  "cpu_power_source": "auto",
+  "network_interface": "auto",
+  "network_speed_mode": "manual",
+  "network_speed_manual_mbps": 150,
+  "always_on_top": true,
+  "disk_display_names": [
+    "Digma 512 Gb",
+    "KingSpec 1Tb",
+    "Solidigm 1Tb"
+  ]
+}

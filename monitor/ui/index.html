@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="ru" style="height:100%; margin:0; padding:0;">
+<head>
+    <meta charset="UTF-8">
+    <title>System Resource Monitor</title>
+
+    <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+    height:100%;
+    overflow:hidden;
+    background-color: #0a0a0b;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #e0e0e0;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-app-region: no-drag;
+}
+html[data-theme="light"], html[data-theme="light"] body {
+    background-color: #f5f5f7;
+    color: #222;
+}
+
+.custom-context-menu {
+    position: fixed;
+    background: rgba(40,40,40,0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    z-index: 10000;
+    display: none;
+    min-width: 160px;
+    padding: 6px 0;
+}
+.custom-context-menu ul { margin:0; padding:0; list-style:none; }
+.custom-context-menu li {
+    padding: 10px 18px;
+    cursor: pointer;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 400;
+    transition: all 0.15s ease;
+    border-radius: 6px;
+    margin: 2px 6px;
+}
+.custom-context-menu li:hover {
+    background: #007aff;
+    color: white;
+}
+html[data-theme="light"] .custom-context-menu {
+    background: rgba(255,255,255,0.9);
+    border-color: rgba(0,0,0,0.1);
+}
+html[data-theme="light"] .custom-context-menu li { color: #222; }
+html[data-theme="light"] .custom-context-menu li:hover { background: #007aff; color: white; }
+
+.monitor-container {
+    height: 100%;
+    padding: 12px;
+    background: rgba(20,20,22,0.6);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    display: flex;
+    flex-direction: column;
+    -webkit-app-region: no-drag;
+}
+
+.grid-container {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.resource-block {
+    position: relative;
+    overflow: hidden;
+    background: rgba(30,30,32,0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 12px 10px;
+    min-height: 0;
+    transition: all 0.3s ease;
+}
+.resource-block.hidden { display: none !important; }
+.resource-block:hover {
+    border-color: rgba(255,255,255,0.15);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+}
+html[data-theme="light"] .resource-block {
+    background: rgba(255,255,255,0.7);
+    border-color: rgba(0,0,0,0.06);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+}
+html[data-theme="light"] .resource-block:hover {
+    border-color: rgba(0,0,0,0.15);
+}
+
+.label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-size: clamp(11px, 1.4vw, 16px);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    z-index: 4;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    padding: 6px 0;
+    background: linear-gradient(180deg, rgba(40,40,42,0.8) 0%, rgba(40,40,42,0) 100%);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #f0f0f0;
+}
+html[data-theme="light"] .label {
+    background: linear-gradient(180deg, rgba(230,230,235,0.8) 0%, rgba(230,230,235,0) 100%);
+    color: #222;
+    text-shadow: none;
+}
+
+.value-text {
+    font-size: clamp(18px, 3.2vw, 34px);
+    font-weight: 600;
+    z-index: 4;
+    text-align: center;
+    line-height: 1.2;
+}
+.value-text .percent { font-weight: 700; }
+
+.fill-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 0%;
+    transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0.85;
+    border-radius: 0 0 18px 18px;
+}
+#fill-ram { background: linear-gradient(180deg, #74b9ff, #0984e3); }
+#fill-gpu { background: linear-gradient(180deg, #55efc4, #00b894); }
+#fill-vram { background: linear-gradient(180deg, #fdcb6e, #f39c12); }
+#fill-disk1, #fill-disk2, #fill-disk3 { background: linear-gradient(180deg, #a29bfe, #6c5ce7); }
+#fill-eth { background: linear-gradient(180deg, #fd79a8, #e84393); }
+
+.cpu-bars {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    padding: 12px 10px 10px 10px;
+    z-index: 1;
+    pointer-events: none;
+}
+.cpu-bar-outer {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border-radius: 2px;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+.cpu-bar-fill {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    transition: height 0.4s ease;
+    background: linear-gradient(180deg, #ff6b6b, #ee5a24);
+    border-radius: 2px;
+}
+
+.power-text {
+    position: absolute;
+    top: 6%;
+    right: 10%;
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    z-index: 4;
+    font-weight: 400;
+    letter-spacing: 0.3px;
+}
+html[data-theme="light"] .power-text { color: rgba(0,0,0,0.5); }
+
+.speed-text {
+    position: absolute;
+    bottom: 8px;
+    right: 10px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    z-index: 4;
+    font-weight: 400;
+    letter-spacing: 0.2px;
+    text-align: right;
+    line-height: 1.4;
+}
+html[data-theme="light"] .speed-text { color: rgba(0,0,0,0.5); }
+
+.disk-model {
+    position: absolute;
+    top: 30px;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    z-index: 4;
+    font-weight: 400;
+    letter-spacing: 0.2px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+}
+html[data-theme="light"] .disk-model {
+    color: rgba(0,0,0,0.5);
+    text-shadow: none;
+}
+
+.icon {
+    position: absolute;
+    bottom: 6px;
+    left: 10px;
+    font-size: 14px;
+    opacity: 0.3;
+    z-index: 1;
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+.modal-content {
+    background: rgba(40,40,42,0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    width: 92%;
+    max-width: 580px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 28px 32px;
+    color: #e0e0e0;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.8);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+html[data-theme="light"] .modal-content {
+    background: rgba(255,255,255,0.9);
+    color: #222;
+    border-color: rgba(0,0,0,0.06);
+}
+.modal-header {
+    font-size: clamp(18px, 3vw, 24px);
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-close {
+    background: none; border: none;
+    color: #aaa; font-size: 28px; cursor: pointer;
+    transition: color 0.2s;
+}
+.modal-close:hover { color: #fff; }
+html[data-theme="light"] .modal-close:hover { color: #222; }
+
+.section-title {
+    font-size: clamp(12px, 1.6vw, 15px);
+    font-weight: 600;
+    color: #007aff;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.row label { flex: 1; font-size: clamp(13px, 1.4vw, 15px); }
+.row input, .row select {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #e0e0e0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: clamp(13px, 1.4vw, 15px);
+    transition: border 0.2s;
+    min-width: 100px;
+}
+.row input:focus, .row select:focus {
+    outline: none;
+    border-color: #007aff;
+}
+html[data-theme="light"] .row input, html[data-theme="light"] .row select {
+    background: rgba(0,0,0,0.04);
+    border-color: rgba(0,0,0,0.15);
+    color: #222;
+}
+.row input[type="checkbox"] {
+    width: 18px; height: 18px; min-width: 18px;
+    accent-color: #007aff;
+}
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: clamp(13px, 1.4vw, 15px);
+}
+.checkbox-row input[type="checkbox"] {
+    width: 18px; height: 18px; min-width: 18px;
+    accent-color: #007aff;
+}
+
+.disk-list {
+    max-height: 140px;
+    overflow-y: auto;
+    margin-top: 8px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.2);
+    padding: 6px;
+}
+html[data-theme="light"] .disk-list {
+    background: rgba(0,0,0,0.04);
+}
+.disk-list-item {
+    padding: 8px 14px;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: clamp(13px, 1.4vw, 15px);
+    margin-bottom: 3px;
+    background: rgba(255,255,255,0.04);
+    color: #e0e0e0;
+    transition: all 0.15s;
+}
+.disk-list-item:hover { background: rgba(255,255,255,0.08); }
+.disk-list-item.selected {
+    background: #007aff;
+    color: white;
+}
+html[data-theme="light"] .disk-list-item {
+    color: #222;
+    background: rgba(0,0,0,0.04);
+}
+html[data-theme="light"] .disk-list-item:hover { background: rgba(0,0,0,0.08); }
+html[data-theme="light"] .disk-list-item.selected { background: #007aff; color: white; }
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+html[data-theme="light"] .modal-footer {
+    border-top-color: rgba(0,0,0,0.06);
+}
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: clamp(14px, 1.4vw, 16px);
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+.btn:hover { transform: translateY(-2px); opacity: 0.9; box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+.btn-primary {
+    background: #007aff;
+    color: white;
+}
+.btn-secondary {
+    background: rgba(255,255,255,0.1);
+    color: #e0e0e0;
+}
+html[data-theme="light"] .btn-secondary {
+    background: rgba(0,0,0,0.06);
+    color: #222;
+}
+.btn-danger {
+    background: #ff3b30;
+    color: white;
+}
+.hint {
+    font-size: 12px;
+    color: #888;
+    margin-top: 4px;
+}
+html[data-theme="light"] .hint { color: #666; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+<div class="monitor-container" id="monitorContainer">
+  <div class="grid-container">
+    <!-- CPU -->
+    <div class="resource-block" id="block-cpu">
+      <div class="label" id="title-cpu">CPU</div>
+      <div class="value-text"><span class="percent" id="val-cpu">0%</span></div>
+      <div class="power-text" id="pow-cpu">⚡ 0.0 Вт</div>
+      <div class="speed-text" id="temp-cpu">--°C</div>
+      <div class="cpu-bars" id="bars-cpu"></div>
+      <div class="icon">⚙️</div>
+    </div>
+    <!-- RAM -->
+    <div class="resource-block" id="block-ram">
+      <div class="label">RAM</div>
+      <div class="value-text"><span class="percent" id="val-ram">0%</span></div>
+      <div class="speed-text" id="ram-info">0.0 / 0.0 Gb</div>
+      <div class="fill-bar" id="fill-ram"></div>
+      <div class="icon">🧠</div>
+    </div>
+    <!-- GPU -->
+    <div class="resource-block" id="block-gpu">
+      <div class="label" id="title-gpu">GPU</div>
+      <div class="value-text"><span class="percent" id="val-gpu">0%</span></div>
+      <div class="power-text" id="pow-gpu">⚡ 0.0 Вт</div>
+      <div class="speed-text" id="temp-gpu">--°C</div>
+      <div class="fill-bar" id="fill-gpu"></div>
+      <div class="icon">🖥️</div>
+    </div>
+    <!-- VRAM -->
+    <div class="resource-block" id="block-vram">
+      <div class="label">VRAM</div>
+      <div class="value-text"><span class="percent" id="val-vram">0%</span></div>
+      <div class="speed-text" id="vram-info">0.0 / 0.0 Gb</div>
+      <div class="fill-bar" id="fill-vram"></div>
+      <div class="icon">💾</div>
+    </div>
+    <!-- Disk 1 -->
+    <div class="resource-block" id="block-disk1">
+      <div class="label" id="title-disk1">Диск 1</div>
+      <div class="disk-model" id="model-disk1"></div>
+      <div class="value-text"><span class="percent" id="val-disk1">0%</span></div>
+      <div class="fill-bar" id="fill-disk1"></div>
+      <div class="speed-text" id="speed-disk1">0 MB/s</div>
+      <div class="icon">💿</div>
+    </div>
+    <!-- Disk 2 -->
+    <div class="resource-block" id="block-disk2">
+      <div class="label" id="title-disk2">Диск 2</div>
+      <div class="disk-model" id="model-disk2"></div>
+      <div class="value-text"><span class="percent" id="val-disk2">0%</span></div>
+      <div class="fill-bar" id="fill-disk2"></div>
+      <div class="speed-text" id="speed-disk2">0 MB/s</div>
+      <div class="icon">💿</div>
+    </div>
+    <!-- Disk 3 -->
+    <div class="resource-block" id="block-disk3">
+      <div class="label" id="title-disk3">Диск 3</div>
+      <div class="disk-model" id="model-disk3"></div>
+      <div class="value-text"><span class="percent" id="val-disk3">0%</span></div>
+      <div class="fill-bar" id="fill-disk3"></div>
+      <div class="speed-text" id="speed-disk3">0 MB/s</div>
+      <div class="icon">💿</div>
+    </div>
+    <!-- Ethernet -->
+    <div class="resource-block" id="block-eth">
+      <div class="label" id="title-eth">Сеть</div>
+      <div class="value-text"><span class="percent" id="val-eth">0%</span></div>
+      <div class="fill-bar" id="fill-eth"></div>
+      <div class="speed-text" id="speed-eth">0 MB/s</div>
+      <div class="icon">🌐</div>
+    </div>
+  </div>
+</div>
+
+<!-- Контекстное меню -->
+<div id="contextMenu" class="custom-context-menu">
+  <ul>
+    <li id="settingsBtn">⚙️ Настройки</li>
+    <li id="hideBtn">👁️ Скрыть</li>
+    <li id="closeBtn">✖️ Закрыть</li>
+  </ul>
+</div>
+
+<!-- Модальное окно -->
+<div id="settingsModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header"><span>Настройки</span><button class="modal-close" id="modalClose">&times;</button></div>
+
+    <div class="section-title">Отображение</div>
+    <div class="row"><label>Тема</label><select id="setting-theme"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></div>
+    <div class="row"><label>Интервал обновления</label>
+      <select id="setting-interval">
+        <option value="500">0.5 сек</option><option value="1000">1 сек</option><option value="2000">2 сек</option>
+        <option value="5000">5 сек</option><option value="10000">10 сек</option><option value="30000">30 сек</option>
+      </select>
+    </div>
+    <div class="row"><input type="checkbox" id="setting-always-on-top"><label>Поверх всех окон</label></div>
+
+    <div class="section-title">Видимость блоков</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <div class="checkbox-row"><input type="checkbox" id="vis-cpu"><label for="vis-cpu">CPU</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="vis-ram"><label for="vis-ram">RAM</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="vis-gpu"><label for="vis-gpu">GPU</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="vis-vram"><label for="vis-vram">VRAM</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="vis-disk1"><label for="vis-disk1">Диск 1</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="vis-disk2"><label for="vis-disk2">Диск 2</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="vis-disk3"><label for="vis-disk3">Диск 3</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="vis-eth"><label for="vis-eth">Сеть</label></div>
+    </div>
+
+    <div class="section-title">Алерты</div>
+    <div class="row" style="flex-wrap:wrap; gap:6px;">
+      <input type="checkbox" id="alert-cpu-enabled"><label>CPU > </label>
+      <input type="number" id="alert-cpu-percent" min="1" max="100" value="90" style="width:60px;">
+      <span>% более</span><input type="number" id="alert-cpu-duration" min="1" max="3600" value="60" style="width:70px;"> сек
+    </div>
+    <div class="row" style="flex-wrap:wrap; gap:6px;">
+      <input type="checkbox" id="alert-gpu-enabled"><label>GPU > </label>
+      <input type="number" id="alert-gpu-percent" min="1" max="100" value="90" style="width:60px;">
+      <span>% более</span><input type="number" id="alert-gpu-duration" min="1" max="3600" value="60" style="width:70px;"> сек
+    </div>
+    <div class="row">
+      <input type="checkbox" id="auto-hide-enabled"><label>Авто-скрытие через</label>
+      <input type="number" id="auto-hide-delay" min="1" max="3600" value="10" style="width:70px;"> сек
+    </div>
+
+    <!-- СКОРОСТЬ СЕТИ -->
+    <div class="section-title">Скорость сети</div>
+    <div class="row">
+      <label>Режим скорости</label>
+      <select id="setting-network-speed-mode">
+        <option value="auto">Авто (скорость подключения)</option>
+        <option value="manual">Вручную (тариф провайдера)</option>
+      </select>
+    </div>
+    <div class="row" id="network-speed-manual-row" style="display:none;">
+      <label>Скорость (Мбит/с)</label>
+      <input type="number" id="setting-network-speed-manual" min="1" max="100000" value="1000" style="width:120px;">
+      <span style="font-size:12px; color:#888;">(например, 100, 500, 1000)</span>
+    </div>
+
+    <div class="section-title">Технические</div>
+    <div class="row"><label>Источник мощности CPU</label>
+      <select id="setting-cpu-power">
+        <option value="auto">Авто (рекомендуется)</option>
+        <option value="winring0">WinRing0 (MSR)</option>
+        <option value="intel_gadget">Intel Power Gadget</option>
+        <option value="hwinfo">HWiNFO</option>
+        <option value="estimate">Оценочная (по нагрузке)</option>
+        <option value="none">Не использовать</option>
+      </select>
+    </div>
+    <div class="row"><label>Сетевой интерфейс</label>
+      <select id="setting-network"><option value="auto">Авто</option></select>
+    </div>
+
+    <div style="margin-top:16px;">
+      <label style="font-weight:600;">Диски для мониторинга:</label>
+      <div style="display:flex; gap:16px; margin:8px 0;">
+        <label><input type="radio" name="disk-mode" value="auto" id="disk-mode-auto"> Авто</label>
+        <label><input type="radio" name="disk-mode" value="manual" id="disk-mode-manual"> Вручную</label>
+      </div>
+      <div class="disk-list" id="disk-list"><div style="padding:12px; color:#888;">Загрузка...</div></div>
+      <div class="hint">Кликните по диску для выбора (макс. 3)</div>
+    </div>
+
+    <!-- ПУНКТ 7: Ручные названия дисков -->
+    <div class="section-title">Названия дисков</div>
+    <div style="display:grid; grid-template-columns:1fr; gap:6px;">
+      <div class="row"><label>Диск 1</label><input type="text" id="disk-name-1" placeholder="Автоматически" maxlength="64" style="width:180px;"></div>
+      <div class="row"><label>Диск 2</label><input type="text" id="disk-name-2" placeholder="Автоматически" maxlength="64" style="width:180px;"></div>
+      <div class="row"><label>Диск 3</label><input type="text" id="disk-name-3" placeholder="Автоматически" maxlength="64" style="width:180px;"></div>
+    </div>
+    <div class="hint">Оставьте пустым для автоматического названия</div>
+
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="btn-reset">Сбросить</button>
+      <button class="btn btn-secondary" id="btn-cancel">Отмена</button>
+      <button class="btn btn-primary" id="btn-save">Сохранить</button>
+    </div>
+  </div>
+</div>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+(function() {
+    if (window._appInitialized) return;
+    window._appInitialized = true;
+
+    var _bridge = null;
+    var appSettings = {};
+    var availableDisks = [];
+    var selectedDisks = [];
+    var currentInterval = 1000;
+    var isInitialized = false;
+    var statsData = null;               // кэш последних полученных данных
+    var frameRequested = false;         // флаг, что запланирован rAF
+    var lastUpdateTime = 0;             // FIX: время последнего обновления данных
+    var rafId = null;                   // FIX: ID requestAnimationFrame для отмены
+    var initBridgeTimer = null;         // FIX: ID setTimeout для остановки при закрытии
+    var memWatchInterval = null;        // FIX: ID setInterval для мониторинга памяти
+
+    // FIX: кэш ссылок на DOM-элементы
+    var dom = {
+        valCpu: document.getElementById('val-cpu'),
+        powCpu: document.getElementById('pow-cpu'),
+        tempCpu: document.getElementById('temp-cpu'),
+        barsCpu: document.getElementById('bars-cpu'),
+        valRam: document.getElementById('val-ram'),
+        ramInfo: document.getElementById('ram-info'),
+        fillRam: document.getElementById('fill-ram'),
+        valGpu: document.getElementById('val-gpu'),
+        tempGpu: document.getElementById('temp-gpu'),
+        powGpu: document.getElementById('pow-gpu'),
+        fillGpu: document.getElementById('fill-gpu'),
+        valVram: document.getElementById('val-vram'),
+        vramInfo: document.getElementById('vram-info'),
+        fillVram: document.getElementById('fill-vram'),
+        valEth: document.getElementById('val-eth'),
+        fillEth: document.getElementById('fill-eth'),
+        speedEth: document.getElementById('speed-eth'),
+        // диски
+        diskTitles: [document.getElementById('title-disk1'), document.getElementById('title-disk2'), document.getElementById('title-disk3')],
+        diskModels: [document.getElementById('model-disk1'), document.getElementById('model-disk2'), document.getElementById('model-disk3')],
+        diskVals: [document.getElementById('val-disk1'), document.getElementById('val-disk2'), document.getElementById('val-disk3')],
+        diskFills: [document.getElementById('fill-disk1'), document.getElementById('fill-disk2'), document.getElementById('fill-disk3')],
+        diskSpeeds: [document.getElementById('speed-disk1'), document.getElementById('speed-disk2'), document.getElementById('speed-disk3')],
+    };
+    // FIX: заранее создаём бары CPU (макс. 64 ядра, но оставим динамическое создание при первом получении)
+    var cpuBarElements = []; // массив объектов {outer, fill}
+
+    function hideWindow() { if (_bridge) _bridge.hideWindow(); }
+    function closeApp() { if (_bridge) _bridge.quitApp(); }
+
+    var contextMenu = document.getElementById('contextMenu');
+    if (document.getElementById('hideBtn')) document.getElementById('hideBtn').addEventListener('click', function() {
+        contextMenu.style.display='none'; hideWindow();
+    });
+    if (document.getElementById('closeBtn')) document.getElementById('closeBtn').addEventListener('click', function() {
+        contextMenu.style.display='none'; closeApp();
+    });
+    if (document.getElementById('settingsBtn')) document.getElementById('settingsBtn').addEventListener('click', function() {
+        contextMenu.style.display='none'; openSettings();
+    });
+
+    window.addEventListener('contextmenu', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      var x = e.clientX; var y = e.clientY - 10;
+      contextMenu.style.display = 'block';
+      var menuWidth = contextMenu.offsetWidth; var menuHeight = contextMenu.offsetHeight;
+      var winWidth = window.innerWidth; var winHeight = window.innerHeight;
+      if (x + menuWidth > winWidth) x = winWidth - menuWidth - 5;
+      if (y + menuHeight > winHeight) y = winHeight - menuHeight - 5;
+      if (x < 5) x = 5; if (y < 5) y = 5;
+      contextMenu.style.left = x + 'px'; contextMenu.style.top = y + 'px';
+    });
+
+    document.addEventListener('mousedown', function(e) {
+      if (contextMenu && contextMenu.contains(e.target)) return;
+      if (contextMenu && contextMenu.style.display === 'block') contextMenu.style.display = 'none';
+    });
+
+    var modal = document.getElementById('settingsModal');
+    var diskListEl = document.getElementById('disk-list');
+    var networkSelect = document.getElementById('setting-network');
+
+    function initBridge() {
+        if (typeof qt === 'undefined') {
+            initBridgeTimer = setTimeout(initBridge, 500);
+            return;
+        }
+        if (!qt.webChannelTransport) {
+            initBridgeTimer = setTimeout(initBridge, 500);
+            return;
+        }
+        try {
+            new QWebChannel(qt.webChannelTransport, function(channel) {
+                _bridge = channel.objects.bridge;
+                isInitialized = true;
+                if (_bridge) { loadSettings(); loadNetworkInterfaces(); loadDisks(); startGameLoop(); }
+            });
+        } catch(e) {
+            console.error('Bridge init error:', e);
+        }
+    }
+
+    async function loadSettings() {
+        if (!_bridge) return;
+        try {
+            appSettings = JSON.parse(await _bridge.getSettings());
+            // ПУНКТ 7: Применяем always_on_top при загрузке
+            if (_bridge.setAlwaysOnTop) _bridge.setAlwaysOnTop(appSettings.always_on_top || false);
+            applySettings();
+        }
+        catch (e) { console.error('loadSettings error', e); }
+    }
+
+    async function loadDisks() {
+        if (!_bridge) return;
+        try { availableDisks = JSON.parse(await _bridge.getDisks()); renderDiskList(); }
+        catch (e) { console.error('loadDisks error', e); }
+    }
+
+    async function loadNetworkInterfaces() {
+        if (!_bridge) return;
+        try {
+            var data = JSON.parse(await _bridge.getNetworkInterfaces());
+            var ifaces = data.interfaces || []; var active = data.active || '';
+            networkSelect.innerHTML = '';
+            var optAuto = document.createElement('option'); optAuto.value = 'auto'; optAuto.textContent = 'Авто';
+            if (!active) optAuto.selected = true; networkSelect.appendChild(optAuto);
+            for (var i = 0; i < ifaces.length; i++) {
+                var opt = document.createElement('option'); opt.value = ifaces[i];
+                opt.textContent = ifaces[i] + (ifaces[i] === active ? ' (активен)' : '');
+                if (ifaces[i] === active && appSettings.network_interface === 'auto') opt.selected = true;
+                networkSelect.appendChild(opt);
+            }
+            if (appSettings.network_interface && appSettings.network_interface !== 'auto') {
+                var found = false;
+                for (var i = 0; i < networkSelect.options.length; i++)
+                    if (networkSelect.options[i].value === appSettings.network_interface) { found = true; break; }
+                if (found) networkSelect.value = appSettings.network_interface; else networkSelect.value = 'auto';
+            }
+        } catch (e) { console.error('loadNetworkInterfaces error', e); }
+    }
+
+    // FIX: делегирование событий вместо индивидуальных обработчиков
+    diskListEl.addEventListener('click', function(e) {
+        var div = e.target.closest('.disk-list-item');
+        if (!div) return;
+        var diskName = div.getAttribute('data-disk');
+        if (!diskName) return;
+        var idx = selectedDisks.indexOf(diskName);
+        if (idx !== -1) selectedDisks.splice(idx, 1);
+        else if (selectedDisks.length < 3) selectedDisks.push(diskName);
+        renderDiskList();
+    });
+
+    function formatDiskSize(bytes) {
+        if (!bytes || bytes <= 0) return '';
+        var tb = bytes / (1024 * 1024 * 1024 * 1024);
+        if (tb >= 0.5) return tb.toFixed(1) + 'Tb';
+        var gb = bytes / (1024 * 1024 * 1024);
+        return Math.round(gb) + 'Gb';
+    }
+
+    function getDiskDisplayName(diskObj) {
+        // diskObj is {name, model, size} or a plain string (backward compat)
+        if (typeof diskObj === 'string') return diskObj;
+        var name = diskObj.name || '';
+        var model = diskObj.model || '';
+        var size = diskObj.size || 0;
+        if (model) {
+            var sizeStr = formatDiskSize(size);
+            return model + (sizeStr ? ' ' + sizeStr : '');
+        }
+        return name || 'Диск';
+    }
+
+    function updateDiskLabels() {
+        // Update visibility checkbox labels in settings modal
+        // ПУНКТ 7: Используем кастомные названия из настроек
+        var ddn = appSettings.disk_display_names || ['', '', ''];
+        for (var i = 0; i < 3; i++) {
+            var labelEl = document.querySelector('label[for="vis-disk' + (i+1) + '"]');
+            if (labelEl) {
+                // Если есть кастомное название, используем его
+                if (ddn[i] && ddn[i].trim()) {
+                    labelEl.textContent = ddn[i].trim();
+                } else {
+                    var diskData = availableDisks[i];
+                    if (diskData) {
+                        labelEl.textContent = getDiskDisplayName(diskData);
+                    } else {
+                        labelEl.textContent = 'Диск ' + (i+1);
+                    }
+                }
+            }
+        }
+    }
+
+    function renderDiskList() {
+        diskListEl.innerHTML = '';
+        if (!availableDisks.length) { diskListEl.innerHTML = '<div style="padding:12px; color:#888;">Нет дисков</div>'; return; }
+
+        // FIX: используем DocumentFragment для batch-обновлений
+        var fragment = document.createDocumentFragment();
+        for (var i = 0; i < availableDisks.length; i++) {
+            var disk = availableDisks[i];
+            // disk is now an object: {name, model, size}
+            var diskName = disk.name || disk;
+            var diskModel = disk.model || '';
+            var diskSize = disk.size || 0;
+            var label = diskName;
+            if (diskModel) {
+                var sizeStr = formatDiskSize(diskSize);
+                label = diskModel + (sizeStr ? ' ' + sizeStr : '');
+            }
+            var div = document.createElement('div'); div.className = 'disk-list-item';
+            div.textContent = label;
+            // FIX: data-атрибут с именем диска (строка)
+            div.setAttribute('data-disk', diskName);
+            if (selectedDisks.indexOf(diskName) !== -1) div.classList.add('selected');
+            fragment.appendChild(div);
+        }
+        diskListEl.appendChild(fragment);
+    }
+
+    function openSettings() {
+        var s = appSettings;
+        document.getElementById('setting-theme').value = s.theme || 'dark';
+        document.getElementById('setting-interval').value = String(s.update_interval || 1000);
+        // ПУНКТ 7: Поверх всех окон
+        document.getElementById('setting-always-on-top').checked = (s.always_on_top === true);
+        var keys = ['cpu','ram','gpu','vram','disk1','disk2','disk3','eth'];
+        for (var i = 0; i < keys.length; i++) {
+            var el = document.getElementById('vis-' + keys[i]);
+            if (el) el.checked = (s.visible_blocks || {})[keys[i]] !== false;
+        }
+        var thr = s.thresholds || {};
+        document.getElementById('alert-cpu-enabled').checked = thr.cpu_enabled === true;
+        document.getElementById('alert-gpu-enabled').checked = thr.gpu_enabled === true;
+        document.getElementById('alert-cpu-percent').value = thr.cpu_percent || 90;
+        document.getElementById('alert-cpu-duration').value = thr.cpu_duration || 60;
+        document.getElementById('alert-gpu-percent').value = thr.gpu_percent || 90;
+        document.getElementById('alert-gpu-duration').value = thr.gpu_duration || 60;
+        var ah = s.auto_hide || {};
+        document.getElementById('auto-hide-enabled').checked = ah.enabled === true;
+        document.getElementById('auto-hide-delay').value = ah.delay || 10;
+        document.getElementById('setting-cpu-power').value = s.cpu_power_source || 'auto';
+        var diskMode = (s.disks && s.disks.mode) || 'auto';
+        document.getElementById('disk-mode-auto').checked = diskMode === 'auto';
+        document.getElementById('disk-mode-manual').checked = diskMode === 'manual';
+        selectedDisks = ((s.disks && s.disks.selected) || []).slice(0,3);
+        renderDiskList();
+        updateDiskLabels();
+        // ПУНКТ 7: Заполняем поля ручных названий дисков
+        var ddn = s.disk_display_names || ['', '', ''];
+        for (var i = 0; i < 3; i++) {
+            var inputEl = document.getElementById('disk-name-' + (i+1));
+            if (inputEl) inputEl.value = ddn[i] || '';
+        }
+        if (s.network_interface) {
+            var found = false;
+            for (var i = 0; i < networkSelect.options.length; i++)
+                if (networkSelect.options[i].value === s.network_interface) { found = true; break; }
+            if (found) networkSelect.value = s.network_interface; else networkSelect.value = 'auto';
+        } else networkSelect.value = 'auto';
+        document.getElementById('setting-network-speed-mode').value = s.network_speed_mode || 'auto';
+        document.getElementById('setting-network-speed-manual').value = s.network_speed_manual_mbps || 1000;
+        document.getElementById('network-speed-manual-row').style.display = s.network_speed_mode === 'manual' ? 'flex' : 'none';
+        modal.style.display = 'flex';
+    }
+
+    function closeModal() { modal.style.display = 'none'; }
+
+    async function saveSettings() {
+        if (!_bridge) return;
+        var newSettings = {
+            theme: document.getElementById('setting-theme').value,
+            update_interval: parseInt(document.getElementById('setting-interval').value),
+            always_on_top: document.getElementById('setting-always-on-top').checked,
+            visible_blocks: {
+                "cpu": document.getElementById("vis-cpu").checked, "ram": document.getElementById("vis-ram").checked,
+                "gpu": document.getElementById("vis-gpu").checked, "vram": document.getElementById("vis-vram").checked,
+                "disk1": document.getElementById("vis-disk1").checked, "disk2": document.getElementById("vis-disk2").checked,
+                "disk3": document.getElementById("vis-disk3").checked, "eth": document.getElementById("vis-eth").checked
+            },
+            thresholds: {
+                cpu_enabled: document.getElementById('alert-cpu-enabled').checked,
+                cpu_percent: parseInt(document.getElementById('alert-cpu-percent').value),
+                cpu_duration: parseInt(document.getElementById('alert-cpu-duration').value),
+                gpu_enabled: document.getElementById('alert-gpu-enabled').checked,
+                gpu_percent: parseInt(document.getElementById('alert-gpu-percent').value),
+                gpu_duration: parseInt(document.getElementById('alert-gpu-duration').value)
+            },
+            auto_hide: { enabled: document.getElementById('auto-hide-enabled').checked, delay: parseInt(document.getElementById('auto-hide-delay').value) },
+            cpu_power_source: document.getElementById('setting-cpu-power').value,
+            network_interface: document.getElementById('setting-network').value,
+            disks: { mode: document.querySelector('input[name="disk-mode"]:checked').value, selected: selectedDisks.slice(0,3) },
+            disk_display_names: [
+                document.getElementById('disk-name-1').value,
+                document.getElementById('disk-name-2').value,
+                document.getElementById('disk-name-3').value
+            ],
+            network_speed_mode: document.getElementById('setting-network-speed-mode').value,
+            network_speed_manual_mbps: parseInt(document.getElementById('setting-network-speed-manual').value) || 1000
+        };
+        try {
+            statsData = null;  // FIX: очистка кеша перед новым запросом
+            appSettings = JSON.parse(await _bridge.saveSettings(JSON.stringify(newSettings)));
+            // ПУНКТ 7: Применяем always_on_top
+            if (_bridge.setAlwaysOnTop) _bridge.setAlwaysOnTop(newSettings.always_on_top);
+            applySettings();
+            closeModal();
+            // FIX: немедленно обновляем статистику, чтобы изменения
+            // (disk_display_names, disk_paths и т.д.) применились без ожидания таймера
+            await fetchStats();
+        }
+        catch (e) { console.error('saveSettings error', e); }
+    }
+
+    async function resetSettings() {
+        if (!confirm('Сбросить все настройки к значениям по умолчанию?')) return;
+        try {
+            appSettings = JSON.parse(await _bridge.saveSettings(null));
+            // ПУНКТ 7: Сбрасываем always_on_top
+            if (_bridge.setAlwaysOnTop) _bridge.setAlwaysOnTop(false);
+            applySettings();
+            closeModal();
+            loadNetworkInterfaces();
+            loadDisks();
+            updateDiskLabels();
+            // FIX: немедленно обновляем статистику после сброса
+            statsData = null;
+            await fetchStats();
+        }
+        catch (e) { console.error('resetSettings error', e); }
+    }
+
+    function applySettings() {
+        var s = appSettings;
+        document.documentElement.setAttribute('data-theme', s.theme || 'dark');
+        currentInterval = s.update_interval || 1000;
+        var keys = ['cpu','ram','gpu','vram','disk1','disk2','disk3','eth'];
+        for (var i = 0; i < keys.length; i++) {
+            var el = document.getElementById('block-' + keys[i]);
+            if (el) el.classList.toggle('hidden', (s.visible_blocks || {})[keys[i]] === false);
+        }
+        setupAutoHide();
+        updateDiskLabels();
+        // FIX: не перезапускаем таймер — game loop сам управляет интервалом
+    }
+
+    var autoHideResetFn = null;
+    var autoHideTimer = null;
+    function setupAutoHide() {
+        var ah = appSettings.auto_hide || {};
+        if (autoHideTimer) { clearTimeout(autoHideTimer); autoHideTimer = null; }
+        if (autoHideResetFn) {
+            document.removeEventListener('mousemove', autoHideResetFn);
+            document.removeEventListener('mousedown', autoHideResetFn);
+            document.removeEventListener('keydown', autoHideResetFn);
+            autoHideResetFn = null;
+        }
+        if (!ah.enabled) return;
+        var delay = (ah.delay || 10) * 1000;
+        autoHideResetFn = function() {
+            if (autoHideTimer) clearTimeout(autoHideTimer);
+            autoHideTimer = setTimeout(function() { hideWindow(); }, delay);
+        };
+        document.addEventListener('mousemove', autoHideResetFn);
+        document.addEventListener('mousedown', autoHideResetFn);
+        document.addEventListener('keydown', autoHideResetFn);
+        autoHideResetFn();
+    }
+
+    document.getElementById('modalClose').addEventListener('click', closeModal);
+    document.getElementById('btn-cancel').addEventListener('click', closeModal);
+    document.getElementById('btn-save').addEventListener('click', saveSettings);
+    document.getElementById('btn-reset').addEventListener('click', resetSettings);
+    modal.addEventListener('click', function(e) { if(e.target === modal) closeModal(); });
+    document.getElementById('setting-network-speed-mode').addEventListener('change', function() {
+        document.getElementById('network-speed-manual-row').style.display = this.value === 'manual' ? 'flex' : 'none';
+    });
+
+    function fmt(val, digits) {
+        digits = digits || 1;
+        if (val === undefined || val === null || isNaN(val)) return '0.0';
+        return Number(val).toFixed(digits);
+    }
+
+    // FIX: обновление DOM через requestAnimationFrame с очисткой statsData
+    function updateDOM() {
+        if (!statsData) { frameRequested = false; return; }
+        var d = statsData;
+
+        // CPU
+        dom.valCpu.textContent = (d.cpu !== undefined ? d.cpu : 0) + '%';
+        dom.powCpu.innerHTML = '⚡ ' + fmt(d.cpu_power) + ' Вт';
+        dom.tempCpu.textContent = (d.temp_cpu !== undefined && d.temp_cpu !== null) ? Math.round(d.temp_cpu) + '°C' : '--°C';
+
+        // CPU bars - обновляем существующие элементы
+        if (d.cpu_cores && d.cpu_cores.length) {
+            // FIX: Полное пересоздание баров при изменении количества ядер — старые DOM-элементы удаляются из массива до очистки, чтобы GC мог их собрать
+            if (cpuBarElements.length !== d.cpu_cores.length) {
+                dom.barsCpu.innerHTML = '';
+                cpuBarElements = [];
+                for (var i = 0; i < d.cpu_cores.length; i++) {
+                    var outer = document.createElement('div'); outer.className = 'cpu-bar-outer';
+                    var fill = document.createElement('div'); fill.className = 'cpu-bar-fill';
+                    outer.appendChild(fill);
+                    dom.barsCpu.appendChild(outer);
+                    cpuBarElements.push({outer: outer, fill: fill});
+                }
+            }
+            // Обновляем высоту
+            for (var i = 0; i < cpuBarElements.length; i++) {
+                var val = d.cpu_cores[i] || 0;
+                cpuBarElements[i].fill.style.height = Math.min(val, 100) + '%';
+            }
+        }
+
+        // RAM
+        dom.valRam.textContent = (d.ram !== undefined ? d.ram : 0) + '%';
+        dom.ramInfo.textContent = fmt(d.ram_used_gb) + ' / ' + fmt(d.ram_total_gb) + ' Gb';
+        dom.fillRam.style.height = (d.ram !== undefined ? d.ram : 0) + '%';
+
+        // GPU
+        dom.valGpu.textContent = (d.gpu !== undefined ? d.gpu : 0) + '%';
+        dom.tempGpu.textContent = (d.temp_gpu !== undefined && d.temp_gpu > 0) ? Math.round(d.temp_gpu) + '°C' : '--°C';
+        dom.powGpu.innerHTML = '⚡ ' + fmt(d.gpu_power) + ' Вт';
+        dom.fillGpu.style.height = (d.gpu !== undefined ? d.gpu : 0) + '%';
+
+        // VRAM
+        dom.valVram.textContent = (d.vram !== undefined ? d.vram : 0) + '%';
+        dom.vramInfo.textContent = fmt(d.vram_used_gb) + ' / ' + fmt(d.vram_total_gb) + ' Gb';
+        dom.fillVram.style.height = (d.vram !== undefined ? d.vram : 0) + '%';
+
+        // Disks
+        var diskNames = d.disk_names || ['', '', ''];
+        var diskSpeeds = d.disk_speeds || [0,0,0];
+        var diskValues = d.disks || [0,0,0];
+        var diskModels = d.disk_models || ['', '', ''];
+        var diskDisplayNames = d.display_names || appSettings.disk_display_names || ['', '', ''];
+        for (var i = 0; i < 3; i++) {
+            // ПУНКТ 7: Используем кастомное название если оно задано
+            var displayName = diskDisplayNames[i] && diskDisplayNames[i].trim() ? diskDisplayNames[i].trim() : diskNames[i];
+            if (dom.diskTitles[i]) dom.diskTitles[i].textContent = displayName || 'Диск ' + (i+1);
+            if (dom.diskModels[i]) {
+                // Если есть кастомное название, скрываем строку модели (она дублирует)
+                if (diskDisplayNames[i] && diskDisplayNames[i].trim()) {
+                    dom.diskModels[i].style.display = 'none';
+                } else if (diskModels[i]) {
+                    dom.diskModels[i].textContent = diskModels[i];
+                    dom.diskModels[i].style.display = '';
+                } else {
+                    dom.diskModels[i].style.display = 'none';
+                }
+            }
+            if (dom.diskVals[i]) dom.diskVals[i].textContent = (diskValues[i] !== undefined ? diskValues[i] : 0) + '%';
+            if (dom.diskFills[i]) dom.diskFills[i].style.height = (diskValues[i] !== undefined ? diskValues[i] : 0) + '%';
+            if (dom.diskSpeeds[i]) dom.diskSpeeds[i].textContent = fmt(diskSpeeds[i]) + ' MB/s';
+        }
+
+        // Ethernet
+        dom.valEth.textContent = (d.eth !== undefined ? d.eth : 0) + '%';
+        dom.fillEth.style.height = (d.eth !== undefined ? d.eth : 0) + '%';
+        dom.speedEth.textContent = fmt(d.eth_speed) + ' MB/s';
+
+        // FIX: statsData очищается в fetchStats; здесь только сброс флага
+        frameRequested = false;
+    }
+
+    // FIX: запрос данных — отдельная функция, не связанная с таймером
+    async function fetchStats() {
+        if (!_bridge) return;
+        try {
+            var json = await _bridge.getStats();
+            // FIX: старый объект statsData будет собран GC после присваивания нового (без преждевременного обнуления)
+            statsData = JSON.parse(json);
+            if (!frameRequested) {
+                frameRequested = true;
+                requestAnimationFrame(updateDOM);
+            }
+        } catch(e) {
+            console.error('fetchStats error', e);
+        }
+    }
+
+    // FIX: единый game loop вместо setTimeout + requestAnimationFrame
+    function gameLoop(timestamp) {
+        rafId = requestAnimationFrame(gameLoop);
+
+        if (timestamp - lastUpdateTime >= currentInterval) {
+            lastUpdateTime = timestamp;
+            fetchStats().catch(function(e) {
+                console.error('fetchStats failed:', e);
+            });
+        }
+    }
+
+    // FIX: Явный флаг видимости для паузы gameLoop при сворачивании.
+    // QWebEngine не всегда автоматически останавливает rAF при скрытии.
+    var isGameLoopPaused = false;
+
+    function startGameLoop() {
+        if (rafId) cancelAnimationFrame(rafId);
+        isGameLoopPaused = false;
+        lastUpdateTime = 0;
+        rafId = requestAnimationFrame(gameLoop);
+    }
+
+    function pauseGameLoop() {
+        isGameLoopPaused = true;
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+        }
+    }
+
+    function resumeGameLoop() {
+        if (isGameLoopPaused) {
+            isGameLoopPaused = false;
+            lastUpdateTime = 0;
+            rafId = requestAnimationFrame(gameLoop);
+        }
+    }
+
+    // REMOVED: setInterval(30s) для принудительного GC.
+    // Современный V8 (Chromium в QWebEngine) отлично управляет памятью сам.
+    // statsData переприсваивается при каждом fetchStats() — старый объект
+    // собирается GC автоматически. cpuBarElements пересоздаётся только при
+    // изменении количества ядер — не нужен периодический сброс.
+    // Оставление этого interval вызывало гонку с gameLoop и мерцание UI.
+
+
+    var container = document.getElementById('monitorContainer');
+    function getResizeDirection(e) {
+        var rect = container.getBoundingClientRect();
+        var x = e.clientX - rect.left; var y = e.clientY - rect.top;
+        var edgeSize = 8; var dir = '';
+        if (x < edgeSize) dir += 'w'; else if (x > rect.width - edgeSize) dir += 'e';
+        if (y < edgeSize) dir += 'n'; else if (y > rect.height - edgeSize) dir += 's';
+        return dir;
+    }
+    function setCursor(dir) {
+        var cursors = { 'n':'n-resize','s':'s-resize','e':'e-resize','w':'w-resize','ne':'ne-resize','nw':'nw-resize','se':'se-resize','sw':'sw-resize' };
+        document.body.style.cursor = cursors[dir] || 'default';
+    }
+    container.addEventListener('mousemove', function(e) { setCursor(getResizeDirection(e)); });
+    container.addEventListener('mousedown', function(e) {
+        var dir = getResizeDirection(e);
+        if (dir) { if (_bridge) _bridge.startResize(dir); e.preventDefault(); return; }
+        if (_bridge) _bridge.startDrag(); e.preventDefault();
+    });
+
+    // FIX: мониторинг памяти для диагностики (убрать в production)
+   
+    memWatchInterval = setInterval(function() {
+        if (performance && performance.memory) {
+            console.log("JS Heap:", (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1), "MB");
+        }
+    }, 5000);
+    
+
+    window.addEventListener('load', initBridge);
+    // FIX: очищаем при выгрузке страницы
+    window.addEventListener('beforeunload', function() {
+        if (rafId) cancelAnimationFrame(rafId);
+        if (initBridgeTimer) clearTimeout(initBridgeTimer);
+        if (memWatchInterval) clearInterval(memWatchInterval);
+        if (autoHideTimer) clearTimeout(autoHideTimer);
+        if (autoHideResetFn) {
+            document.removeEventListener('mousemove', autoHideResetFn);
+            document.removeEventListener('mousedown', autoHideResetFn);
+            document.removeEventListener('keydown', autoHideResetFn);
+        }
+        statsData = null;
+        cpuBarElements = [];
+        availableDisks = [];
+        appSettings = {};
+        _bridge = null;
+        isInitialized = false;
+        frameRequested = false;
+        lastUpdateTime = 0;
+        rafId = null;
+        initBridgeTimer = null;
+        memWatchInterval = null;
+        autoHideResetFn = null;
+        autoHideTimer = null;
+        selectedDisks = [];
+    });
+})();
+</script>
+</body>
+</html>

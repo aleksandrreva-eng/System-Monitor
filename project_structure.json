@@ -1,0 +1,49 @@
+{
+  "project_root": "F:\\AI\\Qwen",
+  "project_name": "System Monitor",
+  "description": "GUI application for monitoring system resources (CPU, GPU, Disk I/O, Network)",
+  "structure": {
+    "Monitor.py": "main entry point",
+    "requirements.txt": "Python dependencies",
+    "settings.json": "application configuration",
+    "README.md": "project documentation",
+    "PROJECT_DOCUMENTATION.md": "detailed docs",
+    "icon.ico": "application icon",
+    "monitor": {
+      "type": "package",
+      "description": "Core application module",
+      "files": {
+        "__init__.py": "package init",
+        "app.py": "Qt application class",
+        "bridge.py": "Python-JavaScript bridge for UI",
+        "config.py": "configuration management",
+        "cpu_power.py": "CPU power and frequency monitoring",
+        "debug.py": "debug utilities",
+        "gpu_manager.py": "GPU monitoring manager",
+        "main_window.py": "main application window",
+        "stats_collector.py": "statistics collection (via ProviderRegistry + CPU power + alerts)",
+        "providers": {
+          "type": "subpackage",
+          "description": "Hardware monitoring providers",
+          "files": {
+            "__init__.py": "package init",
+            "base.py": "abstract base provider",
+            "cpu_provider.py": "CPU/RAM metrics provider (incl. CPU temperature)",
+            "disk_provider.py": "Disk I/O provider (activity, speed, models)",
+            "gpu_provider.py": "GPU/VRAM metrics provider",
+            "network_provider.py": "Network metrics provider",
+            "registry.py": "provider registry"
+          }
+        },
+        "ui": {
+          "type": "subpackage",
+          "description": "Web-based UI",
+          "files": {
+            "__init__.py": "package init",
+            "index.html": "HTML interface with gauges"
+          }
+        }
+      }
+    }
+  }
+}
